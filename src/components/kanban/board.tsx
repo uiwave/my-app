@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
+  DragEndEvent,
   DragOverEvent,
+  DragStartEvent,
   PointerSensor,
   useSensor,
   useSensors,
@@ -12,15 +14,14 @@ import {
 import { KanbanColumn } from './kanban-column';
 import { Task, COLUMNS, Status } from '@/types/kanban';
 
-const INITIAL_TASKS: Task[] = [
-  { id: '1', title: 'Diseñar arquitectura del backend', description: 'Definir endpoints en Spring Boot', status: 'TODO' },
-  { id: '2', title: 'Configurar Tailwind v4', description: 'Usar directivas @theme en CSS', status: 'IN_PROGRESS' },
-  { id: '3', title: 'Crear componentes base', description: 'Instalar primitives de shadcn', status: 'DONE' },
-];
+interface KanbanBoardProps {
+  tasks: Task[];
+  onStatusChange: (taskId: string, newStatus: Status) => void;
+}
 
-export function KanbanBoard() {
-  const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
+export function KanbanBoard({ tasks, onStatusChange }: KanbanBoardProps) {
   const [isMounted, setIsMounted] = useState(false);
+  const dragStartStatus = useRef<Record<string, Status>>({});
 
   useEffect(() => {
     setIsMounted(true);
@@ -31,6 +32,14 @@ export function KanbanBoard() {
       activationConstraint: { distance: 5 },
     })
   );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const activeTask = tasks.find((t) => t.id === active.id);
+    if (activeTask) {
+      dragStartStatus.current[String(active.id)] = activeTask.status;
+    }
+  };
 
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
@@ -49,17 +58,25 @@ export function KanbanBoard() {
     if (isOverColumn) {
       const newStatus = overId as Status;
       if (activeTask.status !== newStatus) {
-        setTasks((prev) =>
-          prev.map((t) => (t.id === activeId ? { ...t, status: newStatus } : t))
-        );
+        onStatusChange(String(activeId), newStatus);
       }
     } else {
       const overTask = tasks.find((t) => t.id === overId);
       if (overTask && activeTask.status !== overTask.status) {
-        setTasks((prev) =>
-          prev.map((t) => (t.id === activeId ? { ...t, status: overTask.status } : t))
-        );
+        onStatusChange(String(activeId), overTask.status);
       }
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active } = event;
+    const originalStatus = dragStartStatus.current[String(active.id)];
+    if (originalStatus) {
+      const finalTask = tasks.find((t) => t.id === active.id);
+      if (finalTask && finalTask.status !== originalStatus) {
+        onStatusChange(String(active.id), finalTask.status);
+      }
+      delete dragStartStatus.current[String(active.id)];
     }
   };
 
@@ -79,7 +96,13 @@ export function KanbanBoard() {
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragOver={handleDragOver}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
       <div className="flex gap-4 overflow-x-auto items-start">
         {COLUMNS.map((col) => (
           <KanbanColumn
