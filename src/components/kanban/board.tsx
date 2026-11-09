@@ -12,16 +12,27 @@ import {
   closestCorners,
 } from '@dnd-kit/core';
 import { KanbanColumn } from './kanban-column';
-import { Task, COLUMNS, Status } from '@/types/kanban';
+import { Task, Column } from '@/types/kanban';
 
 interface KanbanBoardProps {
   tasks: Task[];
-  onStatusChange: (taskId: string, newStatus: Status) => void;
+  columns: Column[];
+  onColumnChange: (taskId: string, newColumnId: string) => void;
+  onRenameColumn: (columnId: string, nombre: string) => void;
+  onMoveColumn: (columnId: string, direction: -1 | 1) => void;
+  onDeleteColumn: (columnId: string) => void;
 }
 
-export function KanbanBoard({ tasks, onStatusChange }: KanbanBoardProps) {
+export function KanbanBoard({
+  tasks,
+  columns,
+  onColumnChange,
+  onRenameColumn,
+  onMoveColumn,
+  onDeleteColumn,
+}: KanbanBoardProps) {
   const [isMounted, setIsMounted] = useState(false);
-  const dragStartStatus = useRef<Record<string, Status>>({});
+  const dragStartStatus = useRef<Record<string, string>>({});
 
   useEffect(() => {
     setIsMounted(true);
@@ -37,7 +48,7 @@ export function KanbanBoard({ tasks, onStatusChange }: KanbanBoardProps) {
     const { active } = event;
     const activeTask = tasks.find((t) => t.id === active.id);
     if (activeTask) {
-      dragStartStatus.current[String(active.id)] = activeTask.status;
+      dragStartStatus.current[String(active.id)] = activeTask.columnaId;
     }
   };
 
@@ -53,28 +64,28 @@ export function KanbanBoard({ tasks, onStatusChange }: KanbanBoardProps) {
     const activeTask = tasks.find((t) => t.id === activeId);
     if (!activeTask) return;
 
-    const isOverColumn = COLUMNS.some((col) => col.id === overId);
+    const isOverColumn = columns.some((col) => col.id === overId);
 
     if (isOverColumn) {
-      const newStatus = overId as Status;
-      if (activeTask.status !== newStatus) {
-        onStatusChange(String(activeId), newStatus);
+      const newColumnId = String(overId);
+      if (activeTask.columnaId !== newColumnId) {
+        onColumnChange(String(activeId), newColumnId);
       }
     } else {
       const overTask = tasks.find((t) => t.id === overId);
-      if (overTask && activeTask.status !== overTask.status) {
-        onStatusChange(String(activeId), overTask.status);
+      if (overTask && activeTask.columnaId !== overTask.columnaId) {
+        onColumnChange(String(activeId), overTask.columnaId);
       }
     }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active } = event;
-    const originalStatus = dragStartStatus.current[String(active.id)];
-    if (originalStatus) {
+    const originalColumn = dragStartStatus.current[String(active.id)];
+    if (originalColumn) {
       const finalTask = tasks.find((t) => t.id === active.id);
-      if (finalTask && finalTask.status !== originalStatus) {
-        onStatusChange(String(active.id), finalTask.status);
+      if (finalTask && finalTask.columnaId !== originalColumn) {
+        onColumnChange(String(active.id), finalTask.columnaId);
       }
       delete dragStartStatus.current[String(active.id)];
     }
@@ -83,12 +94,17 @@ export function KanbanBoard({ tasks, onStatusChange }: KanbanBoardProps) {
   // Evita renderizar dnd-kit durante SSR para corregir el hydration mismatch de aria-describedby
   if (!isMounted) {
     return (
-      <div className="flex gap-4 p-4 overflow-x-auto min-h-[600px] items-start">
-        {COLUMNS.map((col) => (
+      <div className="flex gap-4 overflow-x-auto min-h-[600px] items-start">
+        {columns.map((col, i) => (
           <KanbanColumn
             key={col.id}
             column={col}
-            tasks={tasks.filter((t) => t.status === col.id)}
+            index={i}
+            total={columns.length}
+            tasks={tasks.filter((t) => t.columnaId === col.id)}
+            onRename={onRenameColumn}
+            onMove={onMoveColumn}
+            onDelete={onDeleteColumn}
           />
         ))}
       </div>
@@ -103,12 +119,17 @@ export function KanbanBoard({ tasks, onStatusChange }: KanbanBoardProps) {
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-4 overflow-x-auto items-start">
-        {COLUMNS.map((col) => (
+      <div className="flex gap-4 items-start">
+        {columns.map((col, i) => (
           <KanbanColumn
             key={col.id}
             column={col}
-            tasks={tasks.filter((t) => t.status === col.id)}
+            index={i}
+            total={columns.length}
+            tasks={tasks.filter((t) => t.columnaId === col.id)}
+            onRename={onRenameColumn}
+            onMove={onMoveColumn}
+            onDelete={onDeleteColumn}
           />
         ))}
       </div>
